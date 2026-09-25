@@ -55,3 +55,40 @@ def health_zone(score: float) -> str:
         return "🟠 Surveillance"
     else:
         return "🔴 Alerte — maintenance requise"
+
+
+# Noms d'affichage professionnels (jamais les codes bruts du dataset à l'écran)
+TOOL_DISPLAY_NAMES = {"c1": "Outil A", "c4": "Outil B", "c6": "Outil C"}
+
+
+def display_name_for_tool(raw_tag: str) -> str:
+    return TOOL_DISPLAY_NAMES.get(raw_tag, raw_tag)
+
+
+def bearing_display_names(raw_values) -> dict:
+    """Mappe dynamiquement chaque identifiant brut de roulement vers 'Roulement 1', 'Roulement 2', ..."""
+    return {raw: f"Roulement {i + 1}" for i, raw in enumerate(sorted(set(raw_values)))}
+
+
+def stage_label(rank: int, total: int) -> str:
+    """Étiquette lisible pour une position dans une série de démo (indépendant du nombre de points)."""
+    if total <= 1:
+        return "Instantané unique"
+    pct = rank / (total - 1)
+    if pct <= 0.2:
+        return "🟢 Début de vie"
+    elif pct <= 0.75:
+        return "🟠 Mi-vie"
+    else:
+        return "🔴 Fin de vie (usure avancée)"
+
+
+def safe_feature_importance(model, feature_cols, top_n: int = 10):
+    """Renvoie l'importance des features si le modèle l'expose, sinon None (au lieu de planter)."""
+    if hasattr(model, "feature_importances_"):
+        return (
+            pd.Series(model.feature_importances_, index=feature_cols)
+            .sort_values(ascending=False)
+            .head(top_n)
+        )
+    return None

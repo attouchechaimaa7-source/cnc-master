@@ -4,11 +4,22 @@ import pandas as pd
 import numpy as np
 import joblib
 
-from pipeline_utils import health_zone, display_name_for_tool, bearing_display_names, stage_label
+from pipeline_utils import (
+    health_zone, display_name_for_tool, bearing_display_names, stage_label,
+    inject_base_css, render_gauge_html,
+)
 
 st.set_page_config(page_title="Santé globale", page_icon="🩺", layout="wide")
+inject_base_css()
 st.title("🩺 Santé globale de la machine")
 st.caption("Fusion des diagnostics Outil + Roulement en un score unique")
+
+with st.expander("ℹ️ Comment utiliser cette page"):
+    st.markdown(
+        "Choisis un scénario pour l'outil de coupe et, si le Module 2 est actif, un scénario "
+        "pour le roulement. Le score global ci-dessous combine les deux Health Index en une "
+        "seule note représentant l'état de santé de la machine dans son ensemble."
+    )
 
 m1_ready = os.path.exists("data/module1_model.pkl")
 m2_ready = os.path.exists("data/module2_model.pkl")
@@ -39,7 +50,7 @@ with col1:
     row1 = sub1.iloc[[rank1]]
     pred1 = float(m1_model.predict(row1[m1_features])[0])
     health1 = float(np.clip(100 * pred1 / sub1["RUL"].max(), 0, 100))
-    st.metric("Health Index — Outil", f"{health1:.0f} / 100", delta=health_zone(health1))
+    st.markdown(render_gauge_html(health1, health_zone(health1)), unsafe_allow_html=True)
 
 with col2:
     st.markdown("#### ⚙️ Roulement")
@@ -61,7 +72,7 @@ with col2:
             )
             row2 = sub2.iloc[[rank2]]
             health2 = float(m2_model.predict(row2[m2_features])[0])
-            st.metric("Health Index — Roulement", f"{health2:.0f} / 100", delta=health_zone(health2))
+            st.markdown(render_gauge_html(health2, health_zone(health2)), unsafe_allow_html=True)
         else:
             st.info("Pas de jeu de démo pour le Module 2.")
 
@@ -70,8 +81,11 @@ st.divider()
 global_health = 0.5 * health1 + 0.5 * health2 if health2 is not None else health1
 
 st.subheader("Score de santé global de la machine")
-st.metric("Health Index global", f"{global_health:.0f} / 100", delta=health_zone(global_health))
-st.progress(int(global_health))
+gcol1, gcol2 = st.columns([1, 2])
+with gcol1:
+    st.markdown(render_gauge_html(global_health, health_zone(global_health), size=170), unsafe_allow_html=True)
+with gcol2:
+    st.progress(int(global_health))
 
 st.caption(
     "Le score global pondère à parts égales les deux sous-systèmes surveillés. "

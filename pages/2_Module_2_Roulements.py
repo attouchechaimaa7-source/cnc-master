@@ -7,11 +7,31 @@ import joblib
 from pipeline_utils import (
     MODULE2_SIGNAL_COLS, extract_features_module2, health_zone,
     bearing_display_names, stage_label, safe_feature_importance,
+    inject_base_css, render_gauge_html,
 )
 
 st.set_page_config(page_title="Module 2 — Roulements", page_icon="⚙️", layout="wide")
+inject_base_css()
 st.title("⚙️ Module 2 — RUL Roulements")
 st.caption("Prédiction de la durée de vie restante d'un roulement à partir de sa signature vibratoire")
+
+with st.expander("ℹ️ Comment utiliser ce module"):
+    st.markdown(
+        "- **Roulement 1 / 2 / 3** représentent trois roulements suivis jusqu'à leur panne "
+        "réelle, utilisés pour démontrer la fiabilité du modèle.\n"
+        "- Déplace le curseur **Étape de vie** pour voir le diagnostic évoluer entre le début "
+        "et la fin de vie du roulement.\n"
+        "- Le RUL est exprimé en **pourcentage de vie restante** (100 % = neuf, 0 % = panne), "
+        "ce qui permet de comparer des roulements dont la durée de vie totale diffère.\n"
+        "- En conditions réelles, ces courbes proviendraient du flux vibratoire de ta propre "
+        "machine plutôt que d'un scénario pré-enregistré."
+    )
+with st.expander("🔒 Détails techniques (méthodologie)"):
+    st.markdown(
+        "Modèle entraîné et validé (Leave-One-Out) sur des relevés vibratoires réels "
+        "(accélération horizontale et verticale) jusqu'à la panne complète du roulement. "
+        "14 indicateurs statistiques par instantané, incluant le facteur de crête."
+    )
 
 MODEL_PATH = "data/module2_model.pkl"
 FEATURES_PATH = "data/module2_features.pkl"
@@ -68,10 +88,11 @@ if mode == "Démonstration":
         pred_rul = float(model.predict(row[FEATURE_COLS])[0])
         true_rul = float(row["RUL_pct"].iloc[0])
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3 = st.columns([1, 1, 1.2])
         c1.metric("RUL prédit (%)", f"{pred_rul:.0f}")
         c2.metric("RUL réel (%)", f"{true_rul:.0f}")
-        c3.metric("Health Index", f"{pred_rul:.0f} / 100", delta=health_zone(pred_rul))
+        with c3:
+            st.markdown(render_gauge_html(pred_rul, health_zone(pred_rul)), unsafe_allow_html=True)
 
         st.subheader("Évolution du RUL sur toute la vie du roulement")
         all_preds = model.predict(sub[FEATURE_COLS])

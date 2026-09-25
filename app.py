@@ -1,15 +1,13 @@
 import streamlit as st
 import os
+from pipeline_utils import inject_base_css
 
 st.set_page_config(page_title="CNC Sentinel", page_icon="🛠️", layout="wide")
+inject_base_css()
 
-# ---- Style personnalisé (au-delà du thème Streamlit de base) ----
+# ---- Style personnalisé additionnel pour cette page ----
 st.markdown("""
 <style>
-    .block-container {padding-top: 2.5rem; max-width: 1100px;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-
     .hero {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
         border: 1px solid #334155;
@@ -78,14 +76,39 @@ with st.container(border=True):
 
 st.markdown("---")
 st.markdown("### Comment ça marche")
-c1, c2, c3 = st.columns(3)
-c1.markdown("**1. Choisissez un module**\n\nOutil de coupe ou roulement, selon le composant à surveiller.")
-c2.markdown("**2. Testez ou importez**\n\nDémo instantanée avec données publiques, ou import de vos propres relevés capteurs.")
-c3.markdown("**3. Obtenez un diagnostic**\n\nRUL estimé, Health Index et facteurs explicatifs, en quelques secondes.")
+
+st.markdown("""
+<div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin: 1.5rem 0 0.3rem 0; flex-wrap: wrap;">
+  <div class="flow-icon" style="text-align:center; flex:1; min-width:140px; animation-delay:0s;">
+    <div style="font-size:2.4rem;">📡</div>
+    <b>Capteurs</b>
+    <div style="color:#94A3B8; font-size:0.85rem;">Force, vibration,<br>émission acoustique</div>
+  </div>
+  <div class="flow-icon" style="text-align:center; flex:1; min-width:140px; animation-delay:0.5s;">
+    <div style="font-size:2.4rem;">🧮</div>
+    <b>Extraction de features</b>
+    <div style="color:#94A3B8; font-size:0.85rem;">Indicateurs statistiques<br>du signal</div>
+  </div>
+  <div class="flow-icon" style="text-align:center; flex:1; min-width:140px; animation-delay:1s;">
+    <div style="font-size:2.4rem;">🤖</div>
+    <b>Modèle IA</b>
+    <div style="color:#94A3B8; font-size:0.85rem;">Prédiction du RUL</div>
+  </div>
+  <div class="flow-icon" style="text-align:center; flex:1; min-width:140px; animation-delay:1.5s;">
+    <div style="font-size:2.4rem;">🩺</div>
+    <b>Health Index</b>
+    <div style="color:#94A3B8; font-size:0.85rem;">Score 0-100<br>+ zone d'alerte</div>
+  </div>
+</div>
+<div class="flow-track"><div class="flow-progress"></div></div>
+""", unsafe_allow_html=True)
 
 st.markdown("---")
 st.markdown("### Offres")
 st.caption("Aperçu du modèle de déploiement envisagé pour une mise en production industrielle.")
+
+if "contact_msg" not in st.session_state:
+    st.session_state.contact_msg = None
 
 p1, p2, p3 = st.columns(3)
 with p1:
@@ -100,6 +123,8 @@ with p1:
         </p>
     </div>
     """, unsafe_allow_html=True)
+    if st.button("Commencer gratuitement", use_container_width=True, key="btn_free"):
+        st.switch_page("pages/1_Module_1_Usure_Outil.py")
 with p2:
     st.markdown("""
     <div class="pricing-card featured">
@@ -112,6 +137,8 @@ with p2:
         </p>
     </div>
     """, unsafe_allow_html=True)
+    if st.button("Demander un devis", use_container_width=True, key="btn_atelier"):
+        st.session_state.contact_msg = "Merci ! Un e-mail à contact@cnc-sentinel.example enverrait votre demande (offre Atelier)."
 with p3:
     st.markdown("""
     <div class="pricing-card">
@@ -124,10 +151,15 @@ with p3:
         </p>
     </div>
     """, unsafe_allow_html=True)
+    if st.button("Demander un devis", use_container_width=True, key="btn_usine"):
+        st.session_state.contact_msg = "Merci ! Un e-mail à contact@cnc-sentinel.example enverrait votre demande (offre Usine)."
+
+if st.session_state.contact_msg:
+    st.success(st.session_state.contact_msg)
 
 st.markdown("---")
 st.caption(
-    "Système construit et validé sur des jeux de données publics de référence "
-    "(PHM2010, FEMTO-ST/PRONOSTIA) — méthodologie reproductible, transférable "
-    "à toute machine-outil 3 axes instrumentée."
+    "Système validé sur des données réelles de dégradation mécanique jusqu'à la panne "
+    "(run-to-failure) — méthodologie reproductible, transférable à toute machine-outil "
+    "3 axes instrumentée."
 )

@@ -83,6 +83,64 @@ def stage_label(rank: int, total: int) -> str:
         return "🔴 Fin de vie (usure avancée)"
 
 
+def zone_color(score: float) -> str:
+    if score >= 60:
+        return "#22C55E"
+    elif score >= 25:
+        return "#F97316"
+    else:
+        return "#EF4444"
+
+
+BASE_CSS = """
+<style>
+    .block-container {padding-top: 2rem; max-width: 1100px;}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .section-card {
+        border: 1px solid #334155; border-radius: 14px; padding: 1.4rem 1.6rem;
+        background: #1E293B; margin-bottom: 1rem;
+    }
+    .gauge-wrap {display:flex; flex-direction:column; align-items:center; margin: 0.5rem 0;}
+    .gauge-label {margin-top:0.5rem; font-weight:600; color:#F1F5F9;}
+    @keyframes pulseIcon {
+        0% {transform: scale(1);} 50% {transform: scale(1.15);} 100% {transform: scale(1);}
+    }
+    .flow-icon {animation: pulseIcon 2.2s ease-in-out infinite;}
+    .flow-track {position:relative; height:4px; background:#334155; border-radius:2px;
+        margin: 0.3rem 6% 1.5rem 6%; overflow:hidden;}
+    @keyframes sweep {from {left:-30%;} to {left:100%;}}
+    .flow-progress {position:absolute; top:0; left:-30%; width:30%; height:100%;
+        background:linear-gradient(90deg, transparent, #F97316, transparent);
+        animation: sweep 2.4s linear infinite;}
+</style>
+"""
+
+
+def inject_base_css():
+    import streamlit as st
+    st.markdown(BASE_CSS, unsafe_allow_html=True)
+
+
+def render_gauge_html(score: float, label: str, size: int = 130) -> str:
+    color = zone_color(score)
+    inner = int(size * 0.72)
+    return f"""
+    <div class="gauge-wrap">
+        <div style="position:relative; width:{size}px; height:{size}px; border-radius:50%;
+             background: conic-gradient({color} {score}%, #334155 {score}% 100%);
+             display:flex; align-items:center; justify-content:center;">
+            <div style="width:{inner}px; height:{inner}px; border-radius:50%; background:#0F172A;
+                 display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div style="font-size:1.5rem; font-weight:700; color:{color};">{score:.0f}</div>
+                <div style="font-size:0.65rem; color:#94A3B8;">/ 100</div>
+            </div>
+        </div>
+        <div class="gauge-label">{label}</div>
+    </div>
+    """
+
+
 def safe_feature_importance(model, feature_cols, top_n: int = 10):
     """Renvoie l'importance des features si le modèle l'expose, sinon None (au lieu de planter)."""
     if hasattr(model, "feature_importances_"):

@@ -4,11 +4,11 @@ import pandas as pd
 import numpy as np
 import joblib
 
-from pipeline_utils import health_zone
+from pipeline_utils import health_zone, display_name_for_tool, bearing_display_names, stage_label
 
 st.set_page_config(page_title="Santé globale", page_icon="🩺", layout="wide")
 st.title("🩺 Santé globale de la machine")
-st.caption("Fusion des diagnostics Outil + Roulements en un score unique")
+st.caption("Fusion des diagnostics Outil + Roulement en un score unique")
 
 m1_ready = os.path.exists("data/module1_model.pkl")
 m2_ready = os.path.exists("data/module2_model.pkl")
@@ -24,42 +24,50 @@ m1_demo = pd.read_csv("data/module1_demo_data.csv")
 st.markdown("Choisis un scénario de démonstration pour chaque composant :")
 
 col1, col2 = st.columns(2)
+health2 = None
+
 with col1:
     st.markdown("#### 🔧 Outil de coupe")
-    cutter = st.selectbox("Outil", sorted(m1_demo["experiment_tag"].unique()))
-    sub1 = m1_demo[m1_demo.experiment_tag == cutter].sort_values("cut_id").reset_index(drop=True)
-    cut_choice = st.slider("Avancement (n° de passe)", 1, int(sub1["cut_id"].max()), int(sub1["cut_id"].max()) // 2)
-    row1 = sub1[sub1.cut_id == cut_choice].iloc[0]
-    pred1 = float(m1_model.predict(row1[m1_features].values.reshape(1, -1))[0])
+    tool_choice = st.selectbox(
+        "Outil", sorted(m1_demo["experiment_tag"].unique()), format_func=display_name_for_tool
+    )
+    sub1 = m1_demo[m1_demo.experiment_tag == tool_choice].sort_values("cut_id").reset_index(drop=True)
+    rank1 = st.select_slider(
+        "Étape de vie", options=list(range(len(sub1))), value=len(sub1) // 2,
+        format_func=lambda i: stage_label(i, len(sub1)), key="rank1",
+    )
+    row1 = sub1.iloc[[rank1]]
+    pred1 = float(m1_model.predict(row1[m1_features])[0])
     health1 = float(np.clip(100 * pred1 / sub1["RUL"].max(), 0, 100))
     st.metric("Health Index — Outil", f"{health1:.0f} / 100", delta=health_zone(health1))
 
 with col2:
     st.markdown("#### ⚙️ Roulement")
     if not m2_ready:
-        st.info("Module 2 pas encore actif — le score global utilisera uniquement l'outil pour l'instant.")
-        health2 = None
+        st.info("Module 2 pas encore actif — le score global utilise uniquement l'outil pour l'instant.")
     else:
         m2_model = joblib.load("data/module2_model.pkl")
         m2_features = joblib.load("data/module2_features.pkl")
         if os.path.exists("data/module2_demo_data.csv"):
             m2_demo = pd.read_csv("data/module2_demo_data.csv")
-            bearing = st.selectbox("Roulement", sorted(m2_demo["bearing"].unique()))
-            sub2 = m2_demo[m2_demo.bearing == bearing].sort_values("file_index").reset_index(drop=True)
-            idx_choice = st.slider("Avancement (roulement)", 0, int(sub2["file_index"].max()), int(sub2["file_index"].max()) // 2)
-            row2 = sub2[sub2.file_index == idx_choice].iloc[0]
-            health2 = float(m2_model.predict(row2[m2_features].values.reshape(1, -1))[0])
+            names = bearing_display_names(m2_demo["bearing"].unique())
+            bearing_choice = st.selectbox(
+                "Roulement", sorted(m2_demo["bearing"].unique()), format_func=lambda b: names[b]
+            )
+            sub2 = m2_demo[m2_demo.bearing == bearing_choice].sort_values("file_index").reset_index(drop=True)
+            rank2 = st.select_slider(
+                "Étape de vie", options=list(range(len(sub2))), value=len(sub2) // 2,
+                format_func=lambda i: stage_label(i, len(sub2)), key="rank2",
+            )
+            row2 = sub2.iloc[[rank2]]
+            health2 = float(m2_model.predict(row2[m2_features])[0])
             st.metric("Health Index — Roulement", f"{health2:.0f} / 100", delta=health_zone(health2))
         else:
-            health2 = None
             st.info("Pas de jeu de démo pour le Module 2.")
 
 st.divider()
 
-if health2 is not None:
-    global_health = 0.5 * health1 + 0.5 * health2
-else:
-    global_health = health1
+global_health = 0.5 * health1 + 0.5 * health2 if health2 is not None else health1
 
 st.subheader("Score de santé global de la machine")
 st.metric("Health Index global", f"{global_health:.0f} / 100", delta=health_zone(global_health))
@@ -67,6 +75,6 @@ st.progress(int(global_health))
 
 st.caption(
     "Le score global pondère à parts égales les deux sous-systèmes surveillés. "
-    "La pondération pourra être ajustée selon la criticité relative de chaque composant "
-    "sur une machine réelle."
+    "Cette pondération peut être ajustée selon la criticité relative de chaque "
+    "composant sur une machine réelle."
 )

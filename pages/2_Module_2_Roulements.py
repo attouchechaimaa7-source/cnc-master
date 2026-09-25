@@ -4,11 +4,14 @@ import pandas as pd
 import numpy as np
 import joblib
 
-from pipeline_utils import MODULE2_SIGNAL_COLS, extract_features_module2, health_zone
+from pipeline_utils import (
+    MODULE2_SIGNAL_COLS, extract_features_module2, health_zone,
+    bearing_display_names, stage_label, safe_feature_importance,
+)
 
 st.set_page_config(page_title="Module 2 — Roulements", page_icon="⚙️", layout="wide")
 st.title("⚙️ Module 2 — RUL Roulements")
-st.caption("Dataset : FEMTO-ST / PRONOSTIA — run-to-failure vibratoire")
+st.caption("Prédiction de la durée de vie restante d'un roulement à partir de sa signature vibratoire")
 
 MODEL_PATH = "data/module2_model.pkl"
 FEATURES_PATH = "data/module2_features.pkl"
@@ -40,25 +43,30 @@ def load_demo_data():
 model, FEATURE_COLS = load_model()
 demo = load_demo_data()
 
-mode = st.radio(
-    "Mode", ["Démo (données publiques FEMTO-ST)", "Importer mes données"], horizontal=True
-)
+mode = st.radio("Mode", ["Démonstration", "Importer mes données"], horizontal=True)
 
-if mode.startswith("Démo"):
+if mode == "Démonstration":
     if demo is None:
         st.info(
             "Aucun jeu de démonstration n'est disponible pour l'instant "
             "(`module2_demo_data.csv` manquant) — utilise le mode import."
         )
     else:
-        bearing = st.selectbox("Choisir un roulement", sorted(demo["bearing"].unique()))
-        sub = demo[demo.bearing == bearing].sort_values("file_index").reset_index(drop=True)
-        max_idx = int(sub["file_index"].max())
+        names = bearing_display_names(demo["bearing"].unique())
+        bearing_choice = st.selectbox(
+            "Choisir un roulement", sorted(demo["bearing"].unique()), format_func=lambda b: names[b]
+        )
+        sub = demo[demo.bearing == bearing_choice].sort_values("file_index").reset_index(drop=True)
 
-        idx_choice = st.slider("Position dans la vie du roulement", 0, max_idx, max_idx // 2)
-        row = sub[sub.file_index == idx_choice].iloc[0]
-        pred_rul = float(model.predict(row[FEATURE_COLS].values.reshape(1, -1))[0])
-        true_rul = float(row["RUL_pct"])
+        rank = st.select_slider(
+            "Étape de vie du roulement",
+            options=list(range(len(sub))),
+            value=len(sub) // 2,
+            format_func=lambda i: stage_label(i, len(sub)),
+        )
+        row = sub.iloc[[rank]]
+        pred_rul = float(model.predict(row[FEATURE_COLS])[0])
+        true_rul = float(row["RUL_pct"].iloc[0])
 
         c1, c2, c3 = st.columns(3)
         c1.metric("RUL prédit (%)", f"{pred_rul:.0f}")
@@ -73,13 +81,12 @@ if mode.startswith("Démo"):
         )
         st.line_chart(chart_df)
 
-        st.subheader("Facteurs les plus déterminants pour cette prédiction")
-        importances = (
-            pd.Series(model.feature_importances_, index=FEATURE_COLS)
-            .sort_values(ascending=False)
-            .head(10)
-        )
-        st.bar_chart(importances)
+        importances = safe_feature_importance(model, FEATURE_COLS)
+        if importances is not None:
+            st.subheader("Facteurs les plus déterminants pour cette prédiction")
+            st.bar_chart(importances)
+        else:
+            st.caption("Ce modèle n'expose pas directement l'importance des variables.")
 
 else:
     st.markdown(

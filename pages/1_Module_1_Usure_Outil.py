@@ -3,11 +3,14 @@ import pandas as pd
 import numpy as np
 import joblib
 
-from pipeline_utils import MODULE1_SIGNAL_COLS, extract_features_module1, health_zone
+from pipeline_utils import (
+    MODULE1_SIGNAL_COLS, extract_features_module1, health_zone,
+    display_name_for_tool, stage_label, safe_feature_importance,
+)
 
 st.set_page_config(page_title="Module 1 — Usure d'outil", page_icon="🔧", layout="wide")
 st.title("🔧 Module 1 — RUL Usure d'outil")
-st.caption("Dataset : PHM2010 Milling Data Challenge — fraiseuse CNC 3 axes")
+st.caption("Prédiction de la durée de vie restante d'un outil de coupe sur fraiseuse CNC 3 axes")
 
 
 @st.cache_resource
@@ -25,21 +28,24 @@ def load_demo_data():
 model, FEATURE_COLS = load_model()
 demo = load_demo_data()
 
-mode = st.radio(
-    "Mode", ["Démo (données publiques PHM2010)", "Importer mes données"], horizontal=True
-)
+mode = st.radio("Mode", ["Démonstration", "Importer mes données"], horizontal=True)
 
-if mode.startswith("Démo"):
-    cutter = st.selectbox("Choisir un outil", sorted(demo["experiment_tag"].unique()))
-    sub = demo[demo.experiment_tag == cutter].sort_values("cut_id").reset_index(drop=True)
-    max_cut = int(sub["cut_id"].max())
-
-    cut_choice = st.slider(
-        "Position dans la vie de l'outil (n° de la passe de coupe)", 1, max_cut, max_cut // 2
+if mode == "Démonstration":
+    tool_options = sorted(demo["experiment_tag"].unique())
+    tool_choice = st.selectbox(
+        "Choisir un outil", tool_options, format_func=display_name_for_tool
     )
-    row = sub[sub.cut_id == cut_choice].iloc[[0]]
+    sub = demo[demo.experiment_tag == tool_choice].sort_values("cut_id").reset_index(drop=True)
+
+    rank = st.select_slider(
+        "Étape de vie de l'outil",
+        options=list(range(len(sub))),
+        value=len(sub) // 2,
+        format_func=lambda i: stage_label(i, len(sub)),
+    )
+    row = sub.iloc[[rank]]
     pred_rul = float(model.predict(row[FEATURE_COLS])[0])
-    true_rul = float(row["RUL"])
+    true_rul = float(row["RUL"].iloc[0])
     health = float(np.clip(100 * pred_rul / sub["RUL"].max(), 0, 100))
 
     c1, c2, c3 = st.columns(3)
@@ -54,19 +60,16 @@ if mode.startswith("Démo"):
     )
     st.line_chart(chart_df)
 
-    st.subheader("Facteurs les plus déterminants pour cette prédiction")
-    importances = (
-        pd.Series(model.feature_importances_, index=FEATURE_COLS)
-        .sort_values(ascending=False)
-        .head(10)
-    )
-    st.bar_chart(importances)
+    importances = safe_feature_importance(model, FEATURE_COLS)
+    if importances is not None:
+        st.subheader("Facteurs les plus déterminants pour cette prédiction")
+        st.bar_chart(importances)
 
 else:
     st.markdown(
         "Importe un fichier CSV contenant, pour chaque passe de coupe, les colonnes suivantes "
-        "(une ligne par échantillon temporel) : `experiment_tag`, `cut_id` (ou équivalent), "
-        f"`tool_wear`, et **{', '.join(MODULE1_SIGNAL_COLS)}**."
+        "(une ligne par échantillon temporel) : `cut_id` (ou équivalent), `tool_wear`, et "
+        f"**{', '.join(MODULE1_SIGNAL_COLS)}**."
     )
     uploaded = st.file_uploader("Fichier CSV", type="csv", key="m1_upload")
     if uploaded:
